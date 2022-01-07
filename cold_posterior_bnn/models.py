@@ -150,3 +150,39 @@ def build_resnet_v1(input_shape, depth, num_classes, pfac, use_frn=False,
 
   logging.info('ResNet successfully built.')
   return tf.keras.models.Model(inputs=inputs, outputs=x)
+
+
+class TemperedLikelihoodWrapper(tf.keras.Model):
+
+  def __init__(self, model, loss_fn, temp=1.0):
+      super(TemperedLikelihoodWrapper, self).__init__()
+      self.model = model
+      self.likelihood_temp = tf.Variable(temp, trainable=False)
+      self.loss_fn = loss_fn
+
+  def __call__(self, inputs, training=None):
+      return self.model(inputs, training)
+
+  def get_weights(self):
+      return self.model.get_weights()
+
+  def call(self, inputs, training=None, mask=None):
+      return self.model(inputs, training=training)
+
+  def train_step(self, data):
+
+      x_batch_train, y_batch_train = data
+      with tf.GradientTape(persistent=True) as tape:
+          logits = self.model(x_batch_train)  # model unnormalized probs
+          log_prior_term = sum(self.model.losses)  # minus log prior
+          ce = self.loss_fn(y_batch_train, logits)
+          obj = 1 / self.likelihood_temp * ce + log_prior_term
+      grads = tape.gradient(obj, self.model.trainable_variables)
+      self.optimizer.apply_gradients(zip(grads, self.model.trainable_variables))
+
+
+      self.compiled_metrics.update_state(y_batch_train, logits)
+      return {m.name: m.result() for m in self.metrics}
+
+  def get_config(self):
+      return self.model.get_config()

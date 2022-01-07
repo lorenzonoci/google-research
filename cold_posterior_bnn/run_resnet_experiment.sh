@@ -14,30 +14,30 @@
 
 #!/bin/bash
 
-# Runs the experiment that reproduces figure 1 and figure 2 in the paper Wenzel
+# Runs a faster simplified version of the experiment defined in the file
+# "run_resnet_experiment.sh". This experiment takes roughly 2 days on the GPU
+# Geforce RTX 2080 Ti, in contrast to 30 days for the full experiment.
+# This file approximately reproduces figure 1 and figure 2 in the paper Wenzel
 # et al. 2020, "How Good is the Bayes Posterior in Deep Neural Networks Really?".
-# The individual runs are executed in sequential order which takes around 30
-# days on the GPU Geforce RTX 2080 Ti. For faster execution run in parallel or
-# run the simplified version of this experiment ("run_resnet_experiment_small.sh")
-# which produces an approximate version of figure 1 and 2 and only takes roughly
-# 2 days on a single GPU.
+# The results can be found in the folder "cold_posterior_bnn/results_resnet/".
 #
 # Has to be executed from the parent folder by the shell command
-# $ cold_posterior_bnn/run_resnet_experiment.sh
+# $ cold_posterior_bnn/run_resnet_experiment_small.sh
 
 
 # setup virtual environment and install packages
-virtualenv -p python3 .
-source ./bin/activate
+# virtualenv -p python3 .
+# source ./bin/activate
 
-pip install -r cold_posterior_bnn/requirements.txt
+# pip install -r cold_posterior_bnn/requirements.txt
 
 # Output directory for the results of experiments, string should end with '/'
-output_dir='cold_posterior_bnn/results_resnet/'
+output_dir='cold_posterior_bnn/results/times_epochs_dataset_size/'
 
 # Exeriment settings
 train_epochs=1500
 init_learning_rate=0.1
+likelihood_temp=1.0
 dataset='cifar10'
 model='resnet'
 method='sgmcmc'
@@ -47,17 +47,14 @@ cycle_start_sampling=150
 cycle_length=50
 
 # Hyperparameters to sweep
-num_runs=3  # Number of repeated runs per hyperparameter setting
-min_log_temp=-4  # Minimal log_10 temperature of sweep
-max_log_temp=0  # Maximal log_10 temperature of sweep
-step_temp=0.25  # step between temperatures in log_10 space
+num_runs=1  # Number of repeated runs per hyperparameter setting
 
 # Generate parameter lists to sweep
 seed_range=($(seq 1 $num_runs))
-temp_range=($(seq $min_log_temp $step_temp $max_log_temp))
+temp_range=(2.0)
 
 # Run experiment binary
-experiment_id=-1
+experiment_id=4
 for seed in ${seed_range[@]}; do
   for log_temperature in ${temp_range[@]}; do
     experiment_id=$((experiment_id+1))
@@ -78,7 +75,8 @@ for seed in ${seed_range[@]}; do
       --init_learning_rate=$init_learning_rate \
       --output_dir="${output_dir}run_${experiment_id}"  \
       --experiment_id=$experiment_id  \
-      --write_experiment_metadata_to_csv=True
+      --write_experiment_metadata_to_csv=True \
+      --likelihood_temp=$likelihood_temp
   done
 done
 

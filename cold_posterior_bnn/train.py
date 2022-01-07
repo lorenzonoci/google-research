@@ -95,6 +95,10 @@ flags.DEFINE_string('cycle_schedule', 'cosine',
 flags.DEFINE_float('temperature', 1.,
                    'Temperature used in MCMC scheme (used for sgmcmc and hmc).')
 
+# FLAGS likelihood tempering
+flags.DEFINE_float('likelihood_temp', 1.,
+                   'Temperature used for the likelihood term in MCMC scheme')
+
 FLAGS = flags.FLAGS
 DATASET_SEED = 124
 
@@ -113,7 +117,7 @@ def gradest_train_fn():
                                                           labels=labels)
       ce = tf.reduce_mean(ce)
       prior = sum(model.losses)
-      obj = ce + prior
+      obj = model.likelihood_temp * ce + prior
 
     gradients = tape.gradient(obj, model.trainable_variables)
     grad_est.apply_gradients(zip(gradients, model.trainable_variables))
@@ -123,6 +127,15 @@ def gradest_train_fn():
     gest_step(grad_est, model, images, labels)
 
   return train_step
+
+def ce(y, y_hat):
+  ce = tf.keras.losses.sparse_categorical_crossentropy(y, y_hat,
+                                                        from_logits=True)
+  # ce = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=y_hat,
+  #                                                       labels=y)
+  return tf.reduce_mean(ce)
+
+loss_fn = ce
 
 
 def main(argv):
@@ -151,7 +164,7 @@ def main(argv):
     raise ValueError('Unknown dataset {}.'.format(FLAGS.dataset))
 
   # Prepare data for SG-MCMC methods
-  dataset_size = ds_info['train_num_examples']
+  dataset_size = ds_info['train_num_examples'] * FLAGS.train_epochs
   dataset_size_orig = ds_info.get('train_num_examples_orig', dataset_size)
   dataset_train = dataset_train.repeat().shuffle(10 * FLAGS.batch_size).batch(
       FLAGS.batch_size)
@@ -310,6 +323,17 @@ def main(argv):
     # T0, Tf, begin_iter, ramp_epochs
     callbacks.append(tempramp_cb)
 
+  if FLAGS.likelihood_temp != 1.0:
+    # Model Wrapper for custom Temperature Schedule
+    model = models.TemperedLikelihoodWrapper(model, loss_fn)
+
+    ramp_iterations = FLAGS.cycle_length
+    tempramp_cb_likelihood = keras_utils.TemperatureRampScheduler(
+        0.0, FLAGS.likelihood_temp, begin_ramp_epoch * steps_per_epoch,
+        ramp_iterations * steps_per_epoch, is_likelihood_temp=True)
+    # T0, Tf, begin_iter, ramp_epochs
+    callbacks.append(tempramp_cb_likelihood)
+
   # Additional callbacks
   # Plot additional logs
   def plot_logs(epoch, logs):
@@ -344,7 +368,7 @@ def main(argv):
       tf.keras.metrics.SparseCategoricalAccuracy(name='accuracy')]
   model.compile(
       optimizer,
-      loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+      loss=loss_fn,
       metrics=metrics)
   logging.info('Model input shape: %s', model.input_shape)
   logging.info('Model output shape: %s', model.output_shape)
@@ -372,8 +396,8 @@ def main(argv):
 
   # Add experiment info to experiment metadata csv file in *parent folder*
   if FLAGS.write_experiment_metadata_to_csv:
-    csv_path = pathlib.Path.joinpath(
-        pathlib.Path(FLAGS.output_dir).parent, 'run_sweeps.csv')
+    csv_path = str(pathlib.Path.joinpath(
+        pathlib.Path(FLAGS.output_dir).parent, 'run_sweeps.csv'))
     data = {
         'id': [FLAGS.experiment_id],
         'seed': [FLAGS.seed],

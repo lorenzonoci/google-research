@@ -115,7 +115,7 @@ class TemperatureRampScheduler(tf.keras.callbacks.Callback):
   """
 
   def __init__(self, init_temp, final_temp,
-               begin_ramp_iteration, ramp_iterations):
+               begin_ramp_iteration, ramp_iterations, is_likelihood_temp=False):
     """Create a new warm-up schedule with specified decays.
 
     Args:
@@ -131,6 +131,7 @@ class TemperatureRampScheduler(tf.keras.callbacks.Callback):
     self.final_temp = final_temp
     self.begin_ramp_iteration = begin_ramp_iteration
     self.ramp_iterations = ramp_iterations
+    self.is_likelihood_temp = is_likelihood_temp
 
   def on_batch_begin(self, batch, logs=None):
     # Callback only applies to SG-MCMC methods
@@ -146,8 +147,10 @@ class TemperatureRampScheduler(tf.keras.callbacks.Callback):
       temp = (float(self.global_step-self.begin_ramp_iteration) /
               float(self.ramp_iterations)) * \
           (self.final_temp - self.init_temp) + self.init_temp
-
-    tf.keras.backend.set_value(self.model.optimizer.temp, temp)
+    if not self.is_likelihood_temp:
+      tf.keras.backend.set_value(self.model.optimizer.temp, temp)
+    else:
+      tf.keras.backend.set_value(self.model.likelihood_temp, temp)
 
 
 class TemperatureZeroOneZeroScheduler(tf.keras.callbacks.Callback):
