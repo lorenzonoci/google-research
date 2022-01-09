@@ -117,8 +117,10 @@ def gradest_train_fn():
                                                           labels=labels)
       ce = tf.reduce_mean(ce)
       prior = sum(model.losses)
-      obj = model.likelihood_temp * ce + prior
-
+      if FLAGS.likelihood_temp != 1.0:
+        obj = model.likelihood_temp * ce + prior
+      else:
+        obj = ce + prior
     gradients = tape.gradient(obj, model.trainable_variables)
     grad_est.apply_gradients(zip(gradients, model.trainable_variables))
 
@@ -152,6 +154,7 @@ def main(argv):
         data_augmentation=FLAGS.cifar_data_augmentation,
         subsample_n=FLAGS.subsample_train_size)
     dataset_test = datasets.load_cifar10(tfds.Split.TEST)
+    #dataset_train.map(lambda x,y: (x, tf.cast(y, tf.float32)))
     logging.info('CIFAR10 dataset loaded.')
 
   elif FLAGS.dataset == 'imdb':
@@ -325,11 +328,10 @@ def main(argv):
 
   if FLAGS.likelihood_temp != 1.0:
     # Model Wrapper for custom Temperature Schedule
-    model = models.TemperedLikelihoodWrapper(model, loss_fn)
-
+    model = models.TemperedLikelihoodWrapper(model)
     ramp_iterations = FLAGS.cycle_length
     tempramp_cb_likelihood = keras_utils.TemperatureRampScheduler(
-        0.0, FLAGS.likelihood_temp, begin_ramp_epoch * steps_per_epoch,
+        1.0, FLAGS.likelihood_temp, begin_ramp_epoch * steps_per_epoch,
         ramp_iterations * steps_per_epoch, is_likelihood_temp=True)
     # T0, Tf, begin_iter, ramp_epochs
     callbacks.append(tempramp_cb_likelihood)
@@ -355,6 +357,7 @@ def main(argv):
       diag_cb,
       plot_logs_cb,
       keras_utils.TemperatureMetric(),
+      keras_utils.TemperatureLikelihoodMetric(),
       keras_utils.SamplerTemperatureMetric(),
       tensorboard_cb,  # Should be after all callbacks that write logs
       tf.keras.callbacks.CSVLogger(os.path.join(FLAGS.output_dir, 'logs.csv'))
@@ -367,12 +370,12 @@ def main(argv):
           from_logits=True),
       tf.keras.metrics.SparseCategoricalAccuracy(name='accuracy')]
   model.compile(
-      optimizer,
+      optimizer=optimizer,
       loss=loss_fn,
       metrics=metrics)
-  logging.info('Model input shape: %s', model.input_shape)
-  logging.info('Model output shape: %s', model.output_shape)
-  logging.info('Model number of weights: %s', model.count_params())
+  #logging.info('Model input shape: %s', model.input_shape)
+  #logging.info('Model output shape: %s', model.output_shape)
+  #logging.info('Model number of weights: %s', model.count_params())
 
   model.fit(
       dataset_train,

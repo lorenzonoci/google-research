@@ -67,6 +67,18 @@ class TemperatureMetric(tf.keras.callbacks.Callback):
     if isinstance(self.model.optimizer, sgmcmc.SGMCMCOptimizer):
       logs['temp'] = self.model.optimizer.temp.numpy()
 
+class TemperatureLikelihoodMetric(tf.keras.callbacks.Callback):
+  """Report the SG-MCMC target temperature.
+
+  This callback only reports the target temperature for optimizers that derive
+  from sgmcmc.SGMCMCOptimizer.  If this is not the case, this callback does
+  nothing.
+  """
+
+  def on_epoch_end(self, epoch, logs):
+    if isinstance(self.model.optimizer, sgmcmc.SGMCMCOptimizer):
+      logs['likelihood_temp'] = self.model.likelihood_temp.numpy()
+
 
 class SamplerTemperatureMetric(tf.keras.callbacks.Callback):
   """Report the SG-MCMC kinetic temperatures per variable.

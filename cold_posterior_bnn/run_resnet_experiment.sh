@@ -32,12 +32,12 @@
 # pip install -r cold_posterior_bnn/requirements.txt
 
 # Output directory for the results of experiments, string should end with '/'
-output_dir='cold_posterior_bnn/results/times_epochs_dataset_size/'
+output_dir='cold_posterior_bnn/results/times_epochs_dataset_size_temp_likelihood/'
 
 # Exeriment settings
 train_epochs=1500
 init_learning_rate=0.1
-likelihood_temp=1.0
+likelihood_temp=500
 dataset='cifar10'
 model='resnet'
 method='sgmcmc'
@@ -51,10 +51,10 @@ num_runs=1  # Number of repeated runs per hyperparameter setting
 
 # Generate parameter lists to sweep
 seed_range=($(seq 1 $num_runs))
-temp_range=(2.0)
+temp_range=(0.0)
 
 # Run experiment binary
-experiment_id=4
+experiment_id=2
 for seed in ${seed_range[@]}; do
   for log_temperature in ${temp_range[@]}; do
     experiment_id=$((experiment_id+1))

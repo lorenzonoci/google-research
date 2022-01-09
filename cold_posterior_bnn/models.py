@@ -154,14 +154,15 @@ def build_resnet_v1(input_shape, depth, num_classes, pfac, use_frn=False,
 
 class TemperedLikelihoodWrapper(tf.keras.Model):
 
-  def __init__(self, model, loss_fn, temp=1.0):
+  def __init__(self, model, temp=1.0):
       super(TemperedLikelihoodWrapper, self).__init__()
       self.model = model
       self.likelihood_temp = tf.Variable(temp, trainable=False)
-      self.loss_fn = loss_fn
 
-  def __call__(self, inputs, training=None):
-      return self.model(inputs, training)
+  def compile(self, optimizer, loss, **kwargs):
+      super(TemperedLikelihoodWrapper, self).compile(**kwargs)
+      self.optimizer = optimizer
+      self.loss = loss
 
   def get_weights(self):
       return self.model.get_weights()
@@ -173,12 +174,13 @@ class TemperedLikelihoodWrapper(tf.keras.Model):
 
       x_batch_train, y_batch_train = data
       with tf.GradientTape(persistent=True) as tape:
-          logits = self.model(x_batch_train)  # model unnormalized probs
+          y_batch_train = tf.expand_dims(y_batch_train, axis=-1)
+          logits = self(x_batch_train, training=True)  # model unnormalized probs
           log_prior_term = sum(self.model.losses)  # minus log prior
-          ce = self.loss_fn(y_batch_train, logits)
+          ce = self.loss(y_batch_train, logits)
           obj = 1 / self.likelihood_temp * ce + log_prior_term
-      grads = tape.gradient(obj, self.model.trainable_variables)
-      self.optimizer.apply_gradients(zip(grads, self.model.trainable_variables))
+      grads = tape.gradient(obj, self.trainable_variables)
+      self.optimizer.apply_gradients(zip(grads, self.trainable_variables))
 
 
       self.compiled_metrics.update_state(y_batch_train, logits)
@@ -186,3 +188,7 @@ class TemperedLikelihoodWrapper(tf.keras.Model):
 
   def get_config(self):
       return self.model.get_config()
+
+  @property
+  def trainable_variables(self):
+    return self.model.trainable_variables
