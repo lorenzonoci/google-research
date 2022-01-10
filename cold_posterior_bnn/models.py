@@ -27,6 +27,8 @@ import tensorflow.compat.v2 as tf
 from cold_posterior_bnn.core import frn
 from cold_posterior_bnn.imdb import imdb_model
 
+import numpy as np
+from keras_gcnn.layers import GConv2D, GBatchNorm, GroupPool
 
 def build_cnnlstm(num_words, sequence_length, pfac):
   model = imdb_model.cnn_lstm_nd(pfac, num_words, sequence_length)
@@ -84,7 +86,8 @@ def build_resnet_v1(input_shape, depth, num_classes, pfac, use_frn=False,
         padding='same',
         kernel_initializer='he_normal',
         use_bias=use_bias,
-        use_gconv=use_gconv))(x)
+        use_gconv=use_gconv,
+        is_first_layer=is_first_layer))(x)
 
     if use_frn:
       x = pfac(frn.FRN())(x)
@@ -108,7 +111,7 @@ def build_resnet_v1(input_shape, depth, num_classes, pfac, use_frn=False,
                    pfac=pfac,
                    use_frn=use_frn,
                    use_bias=use_internal_bias,
-                   is_first_layer=is_first_layer)
+                   is_first_layer=True)
   for stack in range(3):
     for res_block in range(num_res_blocks):
       logging.info('Starting ResNet stack #%d block #%d.', stack, res_block)
