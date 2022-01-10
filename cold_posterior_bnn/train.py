@@ -99,6 +99,9 @@ flags.DEFINE_float('temperature', 1.,
 flags.DEFINE_float('likelihood_temp', 1.,
                    'Temperature used for the likelihood term in MCMC scheme')
 
+flags.DEFINE_bool('use_gconv', False,
+                  'Use group-convolutions (random flips and 90-degree rotations)')
+
 FLAGS = flags.FLAGS
 DATASET_SEED = 124
 
@@ -216,7 +219,8 @@ def main(argv):
         num_classes=ds_info['num_classes'],
         pfac=pfac,
         use_frn=FLAGS.resnet_use_frn,
-        use_internal_bias=FLAGS.resnet_bias)
+        use_internal_bias=FLAGS.resnet_bias,
+        use_gconv=FLAGS.use_gconv)
   else:
     raise ValueError('Choose model from: cnnlstm, resnet.')
 

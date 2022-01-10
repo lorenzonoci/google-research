@@ -34,7 +34,7 @@ def build_cnnlstm(num_words, sequence_length, pfac):
 
 
 def build_resnet_v1(input_shape, depth, num_classes, pfac, use_frn=False,
-                    use_internal_bias=True):
+                    use_internal_bias=True, use_gconv=False):
   """Builds ResNet v1.
 
   Args:
@@ -57,7 +57,8 @@ def build_resnet_v1(input_shape, depth, num_classes, pfac, use_frn=False,
                    activation=None,
                    pfac=None,
                    use_frn=False,
-                   use_bias=True):
+                   use_bias=True,
+                   is_first_layer=False):
     """2D Convolution-Batch Normalization-Activation stack builder.
 
     Args:
@@ -75,13 +76,15 @@ def build_resnet_v1(input_shape, depth, num_classes, pfac, use_frn=False,
     """
     x = inputs
     logging.info('Applying conv layer.')
-    x = pfac(tf.keras.layers.Conv2D(
+
+    x = pfac(conv_layer(
         filters,
         kernel_size=kernel_size,
         strides=strides,
         padding='same',
         kernel_initializer='he_normal',
-        use_bias=use_bias))(x)
+        use_bias=use_bias,
+        use_gconv=use_gconv))(x)
 
     if use_frn:
       x = pfac(frn.FRN())(x)
@@ -104,7 +107,8 @@ def build_resnet_v1(input_shape, depth, num_classes, pfac, use_frn=False,
                    activation='relu',
                    pfac=pfac,
                    use_frn=use_frn,
-                   use_bias=use_internal_bias)
+                   use_bias=use_internal_bias,
+                   is_first_layer=is_first_layer)
   for stack in range(3):
     for res_block in range(num_res_blocks):
       logging.info('Starting ResNet stack #%d block #%d.', stack, res_block)
@@ -192,3 +196,45 @@ class TemperedLikelihoodWrapper(tf.keras.Model):
   @property
   def trainable_variables(self):
     return self.model.trainable_variables
+
+
+def conv_layer(
+        filters,
+        kernel_size=3,
+        strides=1,
+        padding='same',
+        kernel_initializer="he_normal",
+        use_bias=True,
+        g_tranform='D4',
+        is_first_layer=False,
+        depth_multiplier=None,
+        use_gconv=False):
+  if use_gconv:
+      h_input = 'Z2' if is_first_layer else g_tranform
+      if depth_multiplier is None:
+          if g_tranform == 'D4':
+              depth_multiplier = 1 / np.sqrt(8)
+          elif g_tranform == 'C4':
+              depth_multiplier = 1 / 2
+          else:
+              raise ValueError
+      conv_layer_instance = GConv2D(
+          int(round(depth_multiplier * filters)),
+          kernel_size=kernel_size,
+          h_input=h_input,
+          h_output=g_tranform,
+          strides=strides,
+          padding=padding,
+          kernel_initializer=kernel_initializer,
+          use_bias=False
+      )
+  else:
+      conv_layer_instance = tf.keras.layers.Conv2D(
+                                        filters,
+                                        kernel_size=kernel_size,
+                                        strides=strides,
+                                        padding=padding,
+                                        kernel_initializer=kernel_initializer,
+                                        use_bias=use_bias
+      )
+  return conv_layer_instance
