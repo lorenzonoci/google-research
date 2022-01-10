@@ -99,12 +99,19 @@ flags.DEFINE_float('temperature', 1.,
 flags.DEFINE_float('likelihood_temp', 1.,
                    'Temperature used for the likelihood term in MCMC scheme')
 
+<<<<<<< HEAD
 flags.DEFINE_bool('use_gconv', False,
                   'Use group-convolutions (random flips and 90-degree rotations)')
+=======
+flags.DEFINE_integer('n_augmentations', 0,
+                     'Fix the number of augmentations')
+>>>>>>> 54d2d3a0f0e4fe3701b113e7b3e741ad3e2b717b
 
 FLAGS = flags.FLAGS
 DATASET_SEED = 124
 
+# Create a generator.
+rng = tf.random.Generator.from_seed(DATASET_SEED, alg='philox')
 
 # Custom gradient function for SG-MCMC methods
 def gradest_train_fn():
@@ -120,10 +127,7 @@ def gradest_train_fn():
                                                           labels=labels)
       ce = tf.reduce_mean(ce)
       prior = sum(model.losses)
-      if FLAGS.likelihood_temp != 1.0:
-        obj = model.likelihood_temp * ce + prior
-      else:
-        obj = ce + prior
+      obj = 1 / FLAGS.likelihood_temp * ce + prior
     gradients = tape.gradient(obj, model.trainable_variables)
     grad_est.apply_gradients(zip(gradients, model.trainable_variables))
 
@@ -138,7 +142,7 @@ def ce(y, y_hat):
                                                         from_logits=True)
   # ce = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=y_hat,
   #                                                       labels=y)
-  return tf.reduce_mean(ce)
+  return 1 / FLAGS.likelihood_temp * tf.reduce_mean(ce)
 
 loss_fn = ce
 
@@ -170,7 +174,14 @@ def main(argv):
     raise ValueError('Unknown dataset {}.'.format(FLAGS.dataset))
 
   # Prepare data for SG-MCMC methods
-  dataset_size = ds_info['train_num_examples'] * FLAGS.train_epochs
+  if FLAGS.cifar_data_augmentation:
+    if FLAGS.n_augmentations > 0:
+      dataset_size = ds_info['train_num_examples'] * FLAGS.n_augmentations
+    else:
+      dataset_size = ds_info['train_num_examples'] * FLAGS.train_epochs
+  else:
+    dataset_size = ds_info['train_num_examples']
+
   dataset_size_orig = ds_info.get('train_num_examples_orig', dataset_size)
   dataset_train = dataset_train.repeat().shuffle(10 * FLAGS.batch_size).batch(
       FLAGS.batch_size)
@@ -330,17 +341,21 @@ def main(argv):
     # T0, Tf, begin_iter, ramp_epochs
     callbacks.append(tempramp_cb)
 
-  if FLAGS.likelihood_temp != 1.0:
-    # Model Wrapper for custom Temperature Schedule
-    model = models.TemperedLikelihoodWrapper(model)
-    ramp_iterations = FLAGS.cycle_length
-    tempramp_cb_likelihood = keras_utils.TemperatureRampScheduler(
-        1.0, FLAGS.likelihood_temp, begin_ramp_epoch * steps_per_epoch,
-        ramp_iterations * steps_per_epoch, is_likelihood_temp=True)
-    # T0, Tf, begin_iter, ramp_epochs
-    callbacks.append(tempramp_cb_likelihood)
+  # # Model Wrapper for likelihood tempering
+  # model = models.TemperedLikelihoodWrapper(model)
+  
+  # ramp_iterations = FLAGS.cycle_length
+  # tempramp_cb_likelihood = keras_utils.TemperatureRampScheduler(
+  #     1.0, FLAGS.likelihood_temp, begin_ramp_epoch * steps_per_epoch,
+  #     ramp_iterations * steps_per_epoch, is_likelihood_temp=True)
+  # # T0, Tf, begin_iter, ramp_epochs
+  # callbacks.append(tempramp_cb_likelihood)
 
   # Additional callbacks
+
+  if FLAGS.n_augmentations > 0:
+    callbacks.append(keras_utils.RandomGeneratorReset(rng, FLAGS.n_augmentations))
+
   # Plot additional logs
   def plot_logs(epoch, logs):
     del epoch  # unused
@@ -361,7 +376,7 @@ def main(argv):
       diag_cb,
       plot_logs_cb,
       keras_utils.TemperatureMetric(),
-      keras_utils.TemperatureLikelihoodMetric(),
+      keras_utils.TemperatureLikelihoodMetric(FLAGS.likelihood_temp),
       keras_utils.SamplerTemperatureMetric(),
       tensorboard_cb,  # Should be after all callbacks that write logs
       tf.keras.callbacks.CSVLogger(os.path.join(FLAGS.output_dir, 'logs.csv'))

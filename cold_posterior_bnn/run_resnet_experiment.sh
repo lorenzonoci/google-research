@@ -36,8 +36,8 @@ output_dir='cold_posterior_bnn/results/times_epochs_dataset_size_temp_likelihood
 
 # Exeriment settings
 train_epochs=1500
-init_learning_rate=0.1
-likelihood_temp=500
+init_learning_rate=50.0
+likelihood_temp=500.0
 dataset='cifar10'
 model='resnet'
 method='sgmcmc'
@@ -45,6 +45,7 @@ momentum_decay=0.98
 batch_size=128
 cycle_start_sampling=150
 cycle_length=50
+n_augmentations=0
 
 # Hyperparameters to sweep
 num_runs=1  # Number of repeated runs per hyperparameter setting
@@ -54,7 +55,7 @@ seed_range=($(seq 1 $num_runs))
 temp_range=(0.0)
 
 # Run experiment binary
-experiment_id=2
+experiment_id=-1
 for seed in ${seed_range[@]}; do
   for log_temperature in ${temp_range[@]}; do
     experiment_id=$((experiment_id+1))
@@ -76,7 +77,8 @@ for seed in ${seed_range[@]}; do
       --output_dir="${output_dir}run_${experiment_id}"  \
       --experiment_id=$experiment_id  \
       --write_experiment_metadata_to_csv=True \
-      --likelihood_temp=$likelihood_temp
+      --likelihood_temp=$likelihood_temp \
+      --n_augmentations=$n_augmentations
   done
 done
 

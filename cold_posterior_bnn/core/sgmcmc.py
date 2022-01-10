@@ -948,6 +948,65 @@ class NaiveSymplecticEulerMCMC(LangevinDynamicsOptimizer):
     return tf.group(*(pupdates + [var.assign(var_updated),
                                   mom.assign(mom_updated)]))
 
+class NaiveSymplecticEulerMCMCRepr(NaiveSymplecticEulerMCMC):
+  def __init__(self,
+              name='NaiveSymplecticEulerMCMCRepr',
+              **kwargs):
+    super(NaiveSymplecticEulerMCMCRepr, self).__init__(name, **kwargs)
+    # fake temp is used to gradually add the noise in the SG-MCMC scheme. 
+    self._set_hyper('fake_temp', 1.0)
+
+  def dynamics_parameters(self, dtype):
+    """Return the dynamics parameters for the Symplectic Euler scheme."""
+    lr = self._get_hyper('learning_rate', dtype)
+    lr = lr / self._get_hyper('temp', dtype)
+    momentum_decay = self._get_hyper('momentum_decay', dtype)
+
+    # Scale the learning rate and momentum decay using the timestep_factor.
+    # A decrease in timestep_factor is guaranteed to improve SDE simulation
+    # accuracy, whereas a simple scaling of learning_rate may not have a
+    # beneficial effect because the friction is in effect increased by a factor
+    # of (1/sqrt(timestep_factor)).  These relationships are derived from the
+    # symplectic Euler deep learning parameterization by expanding
+    #
+    # h' = timestep_factor * h
+    #   ==> learning_rate' = timestep_factor^2 * learning_rate
+    #   ==> momentum_decay' = 1 - timestep_factor*(1-momentum_decay)
+    timestep_factor = self._get_hyper('timestep_factor', dtype)
+    lr = (timestep_factor**2.0) * lr
+    momentum_decay_updated = 1.0 - timestep_factor*(1.0 - momentum_decay)
+    
+    return lr, momentum_decay_updated
+
+  def _resource_apply_dense(self, grad, var):
+    var_dtype = var.dtype.base_dtype
+    total_sample_size = self._get_hyper('total_sample_size', var_dtype)
+    lr, momentum_decay = self.dynamics_parameters(var_dtype)
+    temp = self._get_hyper('temp', var_dtype)
+    fake_temp = self._get_hyper('fake_temp', var_dtype)
+
+    pupdates = self.perform_preconditioner_update(var, grad)
+
+    mom = self.get_slot(var, 'moments')
+
+    # Compute SDE discretization step size
+    h = tf.sqrt(lr / total_sample_size)
+
+    # scaled R_n
+    noise_sigma = tf.sqrt(2.0*temp*fake_temp*(1.0 - momentum_decay))
+    noise = noise_sigma * tf.random.normal(var.shape)
+
+    # nabla_U
+    nabla_u = total_sample_size*grad
+
+    mom_updated = momentum_decay*mom - h*nabla_u + \
+                  self.preconditioner_multiply_m12(var, noise)
+    var_updated = var + h*self.preconditioner_multiply_minv(var, mom_updated)
+
+    return tf.group(*(pupdates + [var.assign(var_updated),
+                                  mom.assign(mom_updated)]))
+
+
 
 class MultivariateNoseHooverMCMC(LangevinDynamicsOptimizer):
   r"""Multivariate Stochastic Gradient Nose-Hoover Thermostat (mSGNHT) dynamics.
