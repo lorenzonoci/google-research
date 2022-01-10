@@ -99,13 +99,11 @@ flags.DEFINE_float('temperature', 1.,
 flags.DEFINE_float('likelihood_temp', 1.,
                    'Temperature used for the likelihood term in MCMC scheme')
 
-<<<<<<< HEAD
 flags.DEFINE_bool('use_gconv', False,
                   'Use group-convolutions (random flips and 90-degree rotations)')
-=======
+
 flags.DEFINE_integer('n_augmentations', 0,
                      'Fix the number of augmentations')
->>>>>>> 54d2d3a0f0e4fe3701b113e7b3e741ad3e2b717b
 
 FLAGS = flags.FLAGS
 DATASET_SEED = 124
