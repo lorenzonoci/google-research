@@ -74,10 +74,16 @@ class TemperatureLikelihoodMetric(tf.keras.callbacks.Callback):
   from sgmcmc.SGMCMCOptimizer.  If this is not the case, this callback does
   nothing.
   """
+  def __init__(self, likelihood_temp=None) -> None:
+    super().__init__()
+    self.likelihood_temp = likelihood_temp
 
   def on_epoch_end(self, epoch, logs):
     if isinstance(self.model.optimizer, sgmcmc.SGMCMCOptimizer):
-      logs['likelihood_temp'] = self.model.likelihood_temp.numpy()
+      if self.likelihood_temp is not None:
+        logs['likelihood_temp'] = self.likelihood_temp
+      else:
+        logs['likelihood_temp'] = self.model.likelihood_temp.numpy()
 
 
 class SamplerTemperatureMetric(tf.keras.callbacks.Callback):
@@ -163,6 +169,19 @@ class TemperatureRampScheduler(tf.keras.callbacks.Callback):
       tf.keras.backend.set_value(self.model.optimizer.temp, temp)
     else:
       tf.keras.backend.set_value(self.model.likelihood_temp, temp)
+
+
+class RandomGeneratorReset(tf.keras.callbacks.Callback):
+
+  def __init__(self, rng, n_epochs, init_seed=1):
+    self.rng = rng
+    self.n_epochs = n_epochs
+    self.init_seed = 1
+
+  def on_epoch_begin(self, epoch, logs):
+    if epoch % self.n_epochs == 0:
+      print("Resetting the random generator: repeating the augmentations")
+      self.rng.reset_from_seed(self.init_seed)
 
 
 class TemperatureZeroOneZeroScheduler(tf.keras.callbacks.Callback):

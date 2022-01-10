@@ -21,7 +21,7 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-import tensorflow.compat.v2 as tf
+import tensorflow as tf
 import tensorflow_datasets as tfds
 
 from cold_posterior_bnn.imdb import imdb_data
@@ -75,7 +75,7 @@ def load_imdb(with_info=False, subsample_n=0):
 
 
 def load_cifar10(split, with_info=False, data_augmentation=True,
-                 subsample_n=0):
+                 subsample_n=0, n_augmentations=0, rng=None):
   """This is a fork of edward2.utils.load_dataset.
 
   Returns a tf.data.Dataset with <image, label> pairs.
@@ -92,6 +92,9 @@ def load_cifar10(split, with_info=False, data_augmentation=True,
     Tuple of (tf.data.Dataset, tf.data.DatasetInfo) if with_info else only
     the dataset.
   """
+  if rng is None:
+    rng = tf.random.Generator.from_seed(124, alg='philox')
+
   dataset, ds_info = tfds.load('cifar10',
                                split=split,
                                with_info=True,
@@ -110,18 +113,22 @@ def load_cifar10(split, with_info=False, data_augmentation=True,
     numpy_labels = numpy_labels[0:subsample_n]
 
   dataset = tf.data.Dataset.from_tensor_slices((numpy_images, numpy_labels))
-
-  def preprocess(image, label):
+  
+  def _preprocess(image, label, seed):
     """Image preprocessing function."""
     if data_augmentation and split == tfds.Split.TRAIN:
-      image = tf.image.random_flip_left_right(image)
+      image = tf.image.stateless_random_flip_left_right(image, seed=seed)
       image = tf.pad(image, [[4, 4], [4, 4], [0, 0]])
-      image = tf.image.random_crop(image, image_shape)
-
+      image = tf.image.stateless_random_crop(image, image_shape, seed=seed)
     image = tf.image.convert_image_dtype(image, tf.float32)
     return image, label
 
-  dataset = dataset.map(preprocess)
+  def preprocess(x, y):
+    seed = rng.make_seeds(2)[0]
+    image, label = _preprocess(x, y, seed)
+    return image, label
+
+  dataset = dataset.map(preprocess, num_parallel_calls=tf.data.AUTOTUNE)
 
   if with_info:
     info = {
