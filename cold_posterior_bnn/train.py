@@ -105,6 +105,9 @@ flags.DEFINE_bool('use_gconv', False,
 flags.DEFINE_integer('n_augmentations', 0,
                      'Fix the number of augmentations')
 
+flags.DEFINE_bool('random_rotation', False,
+                     'Add extra augmentation')
+
 FLAGS = flags.FLAGS
 DATASET_SEED = 124
 
@@ -157,7 +160,9 @@ def main(argv):
     dataset_train, ds_info = datasets.load_cifar10(
         tfds.Split.TRAIN, with_info=True,
         data_augmentation=FLAGS.cifar_data_augmentation,
-        subsample_n=FLAGS.subsample_train_size)
+        subsample_n=FLAGS.subsample_train_size,
+        random_rotation=FLAGS.random_rotation,
+        rng=rng)
     dataset_test = datasets.load_cifar10(tfds.Split.TEST)
     #dataset_train.map(lambda x,y: (x, tf.cast(y, tf.float32)))
     logging.info('CIFAR10 dataset loaded.')

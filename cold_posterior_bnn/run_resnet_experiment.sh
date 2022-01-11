@@ -47,6 +47,7 @@ cycle_start_sampling=150
 cycle_length=50
 n_augmentations=0
 use_gconv=False
+random_rotation=True
 
 # Hyperparameters to sweep
 num_runs=1  # Number of repeated runs per hyperparameter setting
@@ -80,7 +81,8 @@ for seed in ${seed_range[@]}; do
       --write_experiment_metadata_to_csv=True \
       --likelihood_temp=$likelihood_temp \
       --n_augmentations=$n_augmentations \
-      --use_gconv=$use_gconv
+      --use_gconv=$use_gconv \
+      --random_rotation=$random_rotation
   done
 done
 

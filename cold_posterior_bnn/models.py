@@ -22,7 +22,7 @@ from __future__ import division
 from __future__ import print_function
 
 from absl import logging
-import tensorflow.compat.v2 as tf
+import tensorflow as tf
 
 from cold_posterior_bnn.core import frn
 from cold_posterior_bnn.imdb import imdb_model
@@ -89,6 +89,8 @@ def build_resnet_v1(input_shape, depth, num_classes, pfac, use_frn=False,
         use_gconv=use_gconv,
         is_first_layer=is_first_layer))(x)
 
+    # elif use_gconv:
+    #   x = GBatchNorm(h='D4')(x)
     if use_frn:
       x = pfac(frn.FRN())(x)
     else:
@@ -149,6 +151,8 @@ def build_resnet_v1(input_shape, depth, num_classes, pfac, use_frn=False,
     filters *= 2
 
   # v1 does not use BN after last shortcut connection-ReLU
+  if use_gconv:
+      x = GroupPool(h_input='D4')(x)
   x = tf.keras.layers.AveragePooling2D(pool_size=8)(x)
   x = tf.keras.layers.Flatten()(x)
   x = pfac(tf.keras.layers.Dense(
