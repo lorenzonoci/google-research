@@ -163,6 +163,65 @@ def build_resnet_v1(input_shape, depth, num_classes, pfac, use_frn=False,
   return tf.keras.models.Model(inputs=inputs, outputs=x)
 
 
+def build_cnn(input_shape, depth, num_classes, pfac,
+                    use_internal_bias=True, initializer='he_normal', activation='relu',
+                    n_filters=32, kernel_size=3, use_gconv=False, g_group='D4',
+                    strides=2, final_dense=False, double_n_filters=True, padding="same",
+                    average_pooling=False, use_frn=False, use_batch_norm=True):
+    
+    if average_pooling and strides > 1:
+        conv_strides = 1
+    else:
+        conv_strides = strides
+    inputs = tf.keras.layers.Input(shape=input_shape)
+    x = inputs
+    logging.info('Starting CNN net')
+    layer_strides = 1 # No subsampling at first layer
+    for l in range(depth):
+        is_first_layer = True if l==0 else False
+        logging.info("Building Conv Layer")
+        x = pfac(conv_layer(filters=n_filters,
+                            kernel_size=kernel_size,
+                            strides=layer_strides,
+                            kernel_initializer=initializer,
+                            use_bias=use_internal_bias,
+                            use_gconv=use_gconv,
+                            g_tranform=g_group,
+                            padding=padding,
+                            is_first_layer=is_first_layer))(x)
+        #if use_gconv and use_batch_norm:
+        #    x = GBatchNorm(h=g_group)(x)
+        if use_frn:
+            x = frn.FRN()(x)
+        elif use_batch_norm:
+            x = tf.keras.layers.BatchNormalization()(x)
+        if use_frn:
+            x = frn.TLU()(x)
+        else:
+            x = tf.keras.layers.Activation(activation)(x)
+        if l % 2 == 0 and average_pooling and not is_first_layer:
+            x = tf.keras.layers.AveragePooling2D(pool_size=strides)(x)
+        if l % 2 != 0: # downsample at next layer
+            layer_strides = conv_strides
+        else:
+            layer_strides = 1
+        if l % 2 != 0 and double_n_filters: # double filters at next layer
+            n_filters *= 2
+    if use_gconv:
+        x = GroupPool(h_input=g_group)(x)
+    logging.info("Group pooling added")
+    x = tf.keras.layers.GlobalAveragePooling2D()(x)
+    x = tf.keras.layers.Flatten()(x)
+
+    if final_dense:
+        x = pfac(tf.keras.layers.Dense(
+            num_classes,
+            kernel_initializer=initializer))(x)
+
+    logging.info('ResNet successfully built.')
+    return tf.keras.models.Model(inputs=inputs, outputs=x)
+
+
 class TemperedLikelihoodWrapper(tf.keras.Model):
 
   def __init__(self, model, temp=1.0):

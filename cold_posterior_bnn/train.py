@@ -235,6 +235,16 @@ def main(argv):
         use_frn=FLAGS.resnet_use_frn,
         use_internal_bias=FLAGS.resnet_bias,
         use_gconv=FLAGS.use_gconv)
+  elif FLAGS.model == 'cnn':
+    model = models.build_cnn(
+      input_shape=input_shape,
+        depth=4,
+        num_classes=ds_info['num_classes'],
+        pfac=pfac,
+        use_frn=FLAGS.resnet_use_frn,
+        use_internal_bias=FLAGS.resnet_bias,
+        use_gconv=FLAGS.use_gconv
+    )
   else:
     raise ValueError('Choose model from: cnnlstm, resnet.')
 
