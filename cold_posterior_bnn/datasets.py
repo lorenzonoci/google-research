@@ -75,7 +75,7 @@ def load_imdb(with_info=False, subsample_n=0):
 
 
 def load_cifar10(split, with_info=False, data_augmentation=True,
-                 subsample_n=0, n_augmentations=0, rng=None, random_rotation=False):
+                 subsample_n=0, n_augmentations=0, rng=None, random_rotation=False, random_crop=True):
   """This is a fork of edward2.utils.load_dataset.
 
   Returns a tf.data.Dataset with <image, label> pairs.
@@ -121,8 +121,9 @@ def load_cifar10(split, with_info=False, data_augmentation=True,
       if random_rotation:
         k = rng.uniform(shape=(), minval=0, maxval=5, dtype=tf.dtypes.int32)
         image = tf.image.rot90(image, k=k)
-      image = tf.pad(image, [[4, 4], [4, 4], [0, 0]])
-      image = tf.image.stateless_random_crop(image, image_shape, seed=seed)
+      if random_crop:
+        image = tf.pad(image, [[4, 4], [4, 4], [0, 0]])
+        image = tf.image.stateless_random_crop(image, image_shape, seed=seed)
     image = tf.image.convert_image_dtype(image, tf.float32)
     return image, label
 

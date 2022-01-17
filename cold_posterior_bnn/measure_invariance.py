@@ -39,7 +39,19 @@ gcnn = {
     "depth_multiplier": None
 }
 
-models_config = [baseline, gcnn]
+gcnn_2 = {
+    "name": "gcnn_inv",
+    "use_gconv": True,
+    "n_filters": 16,
+    "strides": 1,
+    "final_dense": True,
+    "double_n_filters": True,
+    "padding": "same",
+    "use_blur_pool": False,
+    "depth_multiplier": None
+}
+
+models_config = [gcnn_2, baseline, gcnn]
 
 
 def tot_variation(probs1, probs2):
@@ -55,7 +67,7 @@ pfac = priorfactory.GaussianPriorFactory(prior_stddev=1.0,
 num_classes = 10
 batch_size=max_datapoints
 
-orig_train_ds = load_cifar10(split="train", data_augmentation=True, subsample_n=max_datapoints, random_rotation=True)
+orig_train_ds = load_cifar10(split="train", data_augmentation=True, subsample_n=max_datapoints, random_rotation=True, random_crop=False)
 orig_train_ds = orig_train_ds.batch(batch_size)
 
 for model_conf in models_config:
@@ -66,13 +78,14 @@ for model_conf in models_config:
 
         #augm_train_ds = load_cifar10(split="train", data_augmentation=True, p4m_augm=True)
     
-    model = models.build_resnet_v1(
+    model = models.build_cnn(
             input_shape=(32, 32, 3),
-            depth=20,
+            depth=5,
             num_classes=num_classes,
             pfac=pfac,
             use_internal_bias=True,
-            use_gconv=model_conf["use_gconv"])
+            use_gconv=model_conf["use_gconv"],
+            strides=model_conf["strides"])
         #if seed == 0: # print model summary at first iteration
         #    model.summary()
     augm_preds = []    

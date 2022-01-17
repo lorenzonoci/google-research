@@ -32,11 +32,11 @@
 # pip install -r cold_posterior_bnn/requirements.txt
 
 # Output directory for the results of experiments, string should end with '/'
-output_dir='cold_posterior_bnn/results/times_epochs_dataset_size_temp_likelihood_cnn/'
+output_dir='cold_posterior_bnn/results/times_epochs_dataset_size_temp_likelihood_gcnn_no_crop/'
 
 # Exeriment settings
 train_epochs=1500
-init_learning_rate=150.0
+init_learning_rate=750.0
 likelihood_temp=1500.0
 dataset='cifar10'
 model='cnn'
@@ -46,8 +46,10 @@ batch_size=128
 cycle_start_sampling=150
 cycle_length=50
 n_augmentations=0
-use_gconv=False
+use_gconv=True
 random_rotation=True
+random_crop=False
+strides=2
 
 # Hyperparameters to sweep
 num_runs=1  # Number of repeated runs per hyperparameter setting
@@ -82,7 +84,9 @@ for seed in ${seed_range[@]}; do
       --likelihood_temp=$likelihood_temp \
       --n_augmentations=$n_augmentations \
       --use_gconv=$use_gconv \
-      --random_rotation=$random_rotation
+      --random_rotation=$random_rotation \
+      --random_crop=$random_crop \
+      --strides=$strides
   done
 done
 

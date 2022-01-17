@@ -108,6 +108,12 @@ flags.DEFINE_integer('n_augmentations', 0,
 flags.DEFINE_bool('random_rotation', False,
                      'Add extra augmentation')
 
+flags.DEFINE_bool('random_crop', True,
+                     'Add extra augmentation')
+
+flags.DEFINE_integer('strides', 2, 
+                  'strides for cnn')
+
 FLAGS = flags.FLAGS
 DATASET_SEED = 124
 
@@ -162,6 +168,7 @@ def main(argv):
         data_augmentation=FLAGS.cifar_data_augmentation,
         subsample_n=FLAGS.subsample_train_size,
         random_rotation=FLAGS.random_rotation,
+        random_crop=FLAGS.random_crop,
         rng=rng)
     dataset_test = datasets.load_cifar10(tfds.Split.TEST)
     #dataset_train.map(lambda x,y: (x, tf.cast(y, tf.float32)))
@@ -243,7 +250,8 @@ def main(argv):
         pfac=pfac,
         use_frn=FLAGS.resnet_use_frn,
         use_internal_bias=FLAGS.resnet_bias,
-        use_gconv=FLAGS.use_gconv
+        use_gconv=FLAGS.use_gconv,
+        strides=FLAGS.strides
     )
   else:
     raise ValueError('Choose model from: cnnlstm, resnet.')
