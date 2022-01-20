@@ -23,6 +23,9 @@ from __future__ import print_function
 
 import tensorflow as tf
 import tensorflow_datasets as tfds
+import tensorflow_addons as tfa
+import numpy as np
+import matplotlib.pyplot as plt
 
 from cold_posterior_bnn.imdb import imdb_data
 
@@ -75,7 +78,7 @@ def load_imdb(with_info=False, subsample_n=0):
 
 
 def load_cifar10(split, with_info=False, data_augmentation=True,
-                 subsample_n=0, n_augmentations=0, rng=None, random_rotation=False, random_crop=True):
+                 subsample_n=0, n_augmentations=0, rng=None, random_rotation=False, random_crop=True, angle=None):
   """This is a fork of edward2.utils.load_dataset.
 
   Returns a tf.data.Dataset with <image, label> pairs.
@@ -121,6 +124,10 @@ def load_cifar10(split, with_info=False, data_augmentation=True,
       if random_rotation:
         k = rng.uniform(shape=(), minval=0, maxval=5, dtype=tf.dtypes.int32)
         image = tf.image.rot90(image, k=k)
+      if angle!=0.0:
+        print("Using random angle {}".format(angle))
+        random_angle = rng.uniform(shape=(), minval=-angle, maxval=angle)
+        image = tfa.image.rotate(image, random_angle * np.pi / 180)
       if random_crop:
         image = tf.pad(image, [[4, 4], [4, 4], [0, 0]])
         image = tf.image.stateless_random_crop(image, image_shape, seed=seed)

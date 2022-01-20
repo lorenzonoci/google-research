@@ -111,6 +111,9 @@ flags.DEFINE_bool('random_rotation', False,
 flags.DEFINE_bool('random_crop', True,
                      'Add extra augmentation')
 
+flags.DEFINE_float('random_angle', 0.0,
+                   'rotation angle alpha: random rotation between -alpha e alpha')
+
 flags.DEFINE_integer('strides', 2, 
                   'strides for cnn')
 
@@ -169,6 +172,7 @@ def main(argv):
         subsample_n=FLAGS.subsample_train_size,
         random_rotation=FLAGS.random_rotation,
         random_crop=FLAGS.random_crop,
+        angle=FLAGS.random_angle,
         rng=rng)
     dataset_test = datasets.load_cifar10(tfds.Split.TEST)
     #dataset_train.map(lambda x,y: (x, tf.cast(y, tf.float32)))
