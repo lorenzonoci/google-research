@@ -176,7 +176,7 @@ class RandomGeneratorReset(tf.keras.callbacks.Callback):
   def __init__(self, rng, n_epochs, init_seed=1):
     self.rng = rng
     self.n_epochs = n_epochs
-    self.init_seed = 1
+    self.init_seed = init_seed
 
   def on_epoch_begin(self, epoch, logs):
     if epoch % self.n_epochs == 0:
@@ -604,3 +604,109 @@ class EvaluateEnsemblePartial(keras.callbacks.Callback):
         logs.update({k: float('nan') for k in self.result_labels})
 
 
+class InvarianceStats(keras.callbacks.Callback):
+
+  def __init__(self, model, dataset, n_augmentations, n_datapoints, precompute_optim_temp, rng, init_seed=1, every_nth_epoch=10):
+    super(InvarianceStats, self).__init__()
+    self.every_nth_epoch = every_nth_epoch
+    self.model = model
+    self.dataset = dataset
+    self.n_augmentations = n_augmentations
+    self.n_datapoints = n_datapoints
+    self.precompute_optim_temp = precompute_optim_temp
+    self.rng = rng
+    self.init_seed = init_seed
+    self.results = None 
+    self.optim_t_mean = None
+
+  def gram_matrix(self, model_preds):
+    return tf.matmul(model_preds, tf.transpose(model_preds))
+
+  def optimal_temperature(self, model_preds, B, normalize=True):
+    norm = tf.sqrt(tf.reduce_sum(tf.square(model_preds), axis=1))
+    if normalize:
+      model_preds = model_preds / tf.reshape(norm, (-1, 1))
+    gram_m = self.gram_matrix(model_preds)
+    return tf.reduce_sum(gram_m) / B
+
+  def on_epoch_begin(self, epoch, logs=None):
+    """Called at the begin of an epoch.
+
+    Subclasses should override for any actions to run. This function should only
+    be called during TRAIN mode.
+
+    Arguments:
+        epoch: integer, index of epoch.
+        logs: dict, metric results for this training epoch, and for the
+          validation epoch if validation is performed. Validation result keys
+          are prefixed with `val_`.
+    """
+    if epoch % self.every_nth_epoch != 0:
+      return
+    #   logs.update({"optim_t_mean": float('nan'),
+    #              "optim_t_std": float('nan'),
+    #              "optim_t_unnorm_mean":  float('nan'),
+    #              "optim_t_unnorm_std":  float('nan'),
+    #              "tot_variation_mean":  float('nan'),
+    #              "tot_variation_std": float('nan')
+    #              })
+    #   return
+    print("Computing Invariance Statistics")
+    self.rng.reset_from_seed(self.init_seed)
+    def get_result(res):
+      if hasattr(res, "numpy"):
+        res = res.numpy()
+      elif isinstance(res, tf.Tensor):
+        res = tf.keras.backend.get_value(res)
+      return res
+
+    def tot_variation(probs1, probs2):
+      return np.abs(probs1 - probs2).sum(axis=1).mean(axis=0)
+
+    augm_preds = []
+    augm_proba = []
+    for _ in range(self.n_augmentations):
+      xs, ys = next(self.dataset)
+      preds = self.model.predict(xs)
+      preds = preds.reshape(self.n_datapoints, -1)
+      proba = np.exp(preds)
+      probability=proba/(np.sum(proba, axis=1).reshape((-1, 1)))
+      augm_proba.append(probability)
+      augm_preds.append(preds)
+    augm_preds = np.stack(augm_preds, axis=1)
+    augm_proba = np.stack(augm_proba, axis=1)
+    ts = []
+    un_ts = []
+    for i in range(self.n_datapoints):
+        T = self.optimal_temperature(augm_preds[i], self.n_augmentations, normalize=True)
+        T_unnorm = self.optimal_temperature(augm_preds[i], self.n_augmentations, normalize=False)
+        un_ts.append(T_unnorm)
+        ts.append(get_result(T))
+    tot_vars = []
+    for i in range(self.n_augmentations-1):
+        tot_var = tot_variation(probs1=augm_proba[:,i], probs2=augm_proba[:,i+1])
+        tot_vars.append(tot_var)
+    self.results = {"optim_t_mean": np.mean(ts),
+                 "optim_t_std": np.std(ts),
+                 "optim_t_unnorm_mean": np.mean(un_ts),
+                 "optim_t_unnorm_std": np.std(un_ts),
+                 "tot_variation_mean": np.mean(tot_vars),
+                 "tot_variation_std": np.std(tot_vars)
+                 }
+    print("Invariance Stats: ", self.results)
+    if self.precompute_optim_temp:
+      print('Epoch {}, estimating new temperature" {}'.format(epoch, np.mean(ts)))
+      tf.keras.backend.set_value(self.model.optim_temperature, np.mean(ts))
+  
+  def on_epoch_end(self, epoch, logs):
+    logs = logs or {}
+    if epoch % self.every_nth_epoch  == self.every_nth_epoch - 1:
+      logs.update(self.results)
+    else:
+      logs.update({"optim_t_mean": float('nan'),
+                  "optim_t_std": float('nan'),
+                  "optim_t_unnorm_mean":  float('nan'),
+                  "optim_t_unnorm_std":  float('nan'),
+                  "tot_variation_mean":  float('nan'),
+                  "tot_variation_std": float('nan')
+                  })

@@ -25,7 +25,6 @@ import tensorflow as tf
 import tensorflow_datasets as tfds
 import tensorflow_addons as tfa
 import numpy as np
-import matplotlib.pyplot as plt
 
 from cold_posterior_bnn.imdb import imdb_data
 
@@ -95,7 +94,7 @@ def load_cifar10(split, with_info=False, data_augmentation=True,
     Tuple of (tf.data.Dataset, tf.data.DatasetInfo) if with_info else only
     the dataset.
   """
-  if rng is None:
+  if rng is None and data_augmentation:
     rng = tf.random.Generator.from_seed(124, alg='philox')
 
   dataset, ds_info = tfds.load('cifar10',

@@ -117,6 +117,9 @@ flags.DEFINE_float('random_angle', 0.0,
 flags.DEFINE_integer('strides', 2, 
                   'strides for cnn')
 
+flags.DEFINE_bool('compute_invariance_stats', False,
+                     'invariance stats')
+
 FLAGS = flags.FLAGS
 DATASET_SEED = 124
 
@@ -204,6 +207,20 @@ def main(argv):
   dataset_test_single = dataset_test.batch(FLAGS.batch_size)
   dataset_test = dataset_test.repeat().batch(test_batch_size)
 
+  if FLAGS.compute_invariance_stats:
+    rng_inv = tf.random.Generator.from_seed(DATASET_SEED, alg='philox')
+    dataset_train_single = datasets.load_cifar10(
+        tfds.Split.TRAIN, with_info=False,
+        data_augmentation=True,
+        subsample_n=500,
+        random_rotation=FLAGS.random_rotation,
+        random_crop=FLAGS.random_crop,
+        angle=FLAGS.random_angle,
+        rng=rng_inv)
+    dataset_train_single = dataset_train_single.repeat().batch(500)
+  else:
+    rng_inv = None
+    dataset_train_single = None
   # If --pretend_batch_size flag is provided any cycle/epoch-length computation
   # is done using this pretend_batch_size.  Real batches are all still
   # FLAGS.batch_size of length.  This feature is used in the batch size ablation
@@ -379,7 +396,7 @@ def main(argv):
   # Additional callbacks
 
   if FLAGS.n_augmentations > 0:
-    callbacks.append(keras_utils.RandomGeneratorReset(rng, FLAGS.n_augmentations))
+    callbacks.append(keras_utils.RandomGeneratorReset(rng, FLAGS.n_augmentations, DATASET_SEED))
 
   # Plot additional logs
   def plot_logs(epoch, logs):
@@ -388,8 +405,17 @@ def main(argv):
     if FLAGS.method == 'sgmcmc':
       logs['timestep_factor'] = optimizer.get_config()['timestep_factor']
     logs['ens_size'] = len(ens)
-  plot_logs_cb = tf.keras.callbacks.LambdaCallback(on_epoch_end=plot_logs)
 
+  if FLAGS.compute_invariance_stats:
+    print("Adding Temperature callback")
+    inv_stats_cb = keras_utils.InvarianceStats(model, iter(dataset_train_single), 
+                                                n_datapoints=500, every_nth_epoch=10,
+                                                rng=rng_inv, init_seed=DATASET_SEED,
+                                                n_augmentations=50, precompute_optim_temp=False,
+                                                )
+    callbacks.append(inv_stats_cb)
+  
+  plot_logs_cb = tf.keras.callbacks.LambdaCallback(on_epoch_end=plot_logs)
   # Write logs to tensorboard
   tensorboard_cb = tf.keras.callbacks.TensorBoard(
       log_dir=FLAGS.output_dir, write_graph=False)
